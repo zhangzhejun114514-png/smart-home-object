@@ -96,12 +96,12 @@ class SmartHomeDB:
             INSERT OR IGNORE INTO system_status (id) VALUES (1)
         ''')
         
-        # 插入默认授权人员
+        # 插入默认授权人员（含人脸ID）
         cursor.execute('''
-            INSERT OR IGNORE INTO authorized_persons (name, rfid_tag) VALUES 
-            ('管理员', 'RFID001'),
-            ('家庭成员A', 'RFID002'),
-            ('家庭成员B', 'RFID003')
+            INSERT OR IGNORE INTO authorized_persons (name, rfid_tag, face_id) VALUES 
+            ('管理员', 'RFID001', 'FACE001'),
+            ('家庭成员A', 'RFID002', 'FACE002'),
+            ('家庭成员B', 'RFID003', 'FACE003')
         ''')
         
         conn.commit()

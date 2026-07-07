@@ -1,6 +1,6 @@
 {
-  "ha_url": "http://localhost:8123",
-  "ha_token": "",
+  "ha_url": "http://10.29.127.49:8123",
+  "ha_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIzNjIzMjc4ZDJkM2Y0OWY0OGQ4OTNkYmZmMTA5ZjMzNCIsImlhdCI6MTc4MzQ0MzQ4NCwiZXhwIjoyMDk4ODAzNDg0fQ.EefvZwsihQiUdk8RoAoz3n-cCWayw5uzd0Eao1Fx4NY",
   "device_mapping": {
     "temperature_sensor": "sensor.indoor_temperature",
     "humidity_sensor": "sensor.indoor_humidity",

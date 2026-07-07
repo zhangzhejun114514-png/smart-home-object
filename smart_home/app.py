@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request
 from database import db
 from datetime import datetime
 from ha_client import ha_client
+from face_recognition import face_engine
 
 app = Flask(__name__)
 
@@ -187,18 +188,20 @@ def get_access_logs():
 
 @app.route('/api/access/verify', methods=['POST'])
 def verify_access():
-    """验证门禁（模拟）"""
+    """验证门禁（人脸识别/RFID）"""
     data = request.json
-    rfid_tag = data.get('rfid_tag', '')
+    face_id = data.get('face_id', data.get('rfid_tag', ''))
+    verify_type = data.get('verify_type', 'face')
     persons = db.get_authorized_persons()
     
+    # 优先匹配face_id，其次匹配rfid_tag
     for person in persons:
-        if person.get('rfid_tag') == rfid_tag:
-            db.add_access_log(person['name'], 'rfid', 'granted')
-            return jsonify({'granted': True, 'person': person['name'], 'message': f'欢迎, {person["name"]}!', 'message_en': f'Welcome, {person["name"]}!'})
+        if person.get('face_id') == face_id or person.get('rfid_tag') == face_id:
+            db.add_access_log(person['name'], verify_type, 'granted')
+            return jsonify({'granted': True, 'person': person['name'], 'message': f'人脸验证通过, 欢迎 {person["name"]}!', 'message_en': f'Face verified, Welcome {person["name"]}!'})
     
-    db.add_access_log('未知人员', 'rfid', 'denied')
-    return jsonify({'granted': False, 'person': None, 'message': '未授权，访问被拒绝', 'message_en': 'Unauthorized, access denied'})
+    db.add_access_log('未知人员', verify_type, 'denied')
+    return jsonify({'granted': False, 'person': None, 'message': '人脸未识别，访问被拒绝', 'message_en': 'Face not recognized, access denied'})
 
 @app.route('/api/access/persons', methods=['GET'])
 def get_persons():
@@ -212,8 +215,12 @@ def add_person():
     data = request.json
     name = data.get('name', '')
     rfid_tag = data.get('rfid_tag', '')
-    success = db.add_authorized_person(name, rfid_tag=rfid_tag)
+    face_id = data.get('face_id', '')
+    success = db.add_authorized_person(name, rfid_tag=rfid_tag, face_id=face_id)
     if success:
+        # 同步到人脸识别引擎的已知人脸库
+        if face_id:
+            face_engine.add_known_face(face_id, name)
         return jsonify({'message': f'已添加授权人员: {name}', 'message_en': f'Authorized person added: {name}'})
     return jsonify({'error': f'人员 {name} 已存在', 'error_en': f'Person {name} already exists'}), 400
 
@@ -224,6 +231,82 @@ def get_statistics():
     """获取全部统计信息"""
     stats = db.get_statistics()
     return jsonify(stats)
+
+# ==================== API: YOLOv8 人脸识别 ====================
+
+@app.route('/api/face/recognize', methods=['POST'])
+def face_recognize():
+    """YOLOv8 人脸识别接口 - 接收摄像头帧进行识别"""
+    data = request.json
+    image_data = data.get('image', '')
+
+    if not image_data:
+        return jsonify({'error': '无图像数据', 'error_en': 'No image data'}), 400
+
+    # 去掉 Base64 前缀 (data:image/jpeg;base64,)
+    if ',' in image_data:
+        image_data = image_data.split(',')[1]
+
+    result = face_engine.recognize_from_base64(image_data)
+    return jsonify(result)
+
+@app.route('/api/face/status', methods=['GET'])
+def face_status():
+    """获取人脸识别引擎状态"""
+    status = face_engine.get_status()
+    return jsonify(status)
+
+@app.route('/api/face/config', methods=['GET'])
+def face_get_config():
+    """获取人脸识别配置"""
+    config = face_engine.config
+    status = face_engine.get_status()
+    return jsonify({'config': config, 'status': status})
+
+@app.route('/api/face/config', methods=['POST'])
+def face_save_config():
+    """保存人脸识别配置"""
+    data = request.json
+    face_engine.save_config(data)
+    # 如果从模拟切换到真实模式，尝试加载模型
+    if not data.get('simulation_mode', True):
+        face_engine.reload_model()
+    status = face_engine.get_status()
+    return jsonify({'message': '人脸识别配置已保存', 'message_en': 'Face recognition config saved', 'status': status})
+
+@app.route('/api/face/reload', methods=['POST'])
+def face_reload():
+    """重新加载YOLOv8模型"""
+    success = face_engine.reload_model()
+    status = face_engine.get_status()
+    if success:
+        return jsonify({'message': '模型已重新加载', 'message_en': 'Model reloaded', 'status': status})
+    return jsonify({'message': '模型未加载，仍使用模拟模式', 'message_en': 'Model not loaded, using simulation mode', 'status': status})
+
+@app.route('/api/face/known', methods=['GET'])
+def face_get_known():
+    """获取已知人脸列表"""
+    known = face_engine.config.get('known_faces', {})
+    return jsonify(known)
+
+@app.route('/api/face/known', methods=['POST'])
+def face_add_known():
+    """添加已知人脸"""
+    data = request.json
+    face_id = data.get('face_id', '')
+    name = data.get('name', '')
+    if not face_id or not name:
+        return jsonify({'error': '缺少参数', 'error_en': 'Missing parameters'}), 400
+    face_engine.add_known_face(face_id, name)
+    return jsonify({'message': f'已添加已知人脸: {name} ({face_id})', 'message_en': f'Known face added: {name} ({face_id})'})
+
+@app.route('/api/face/known/<face_id>', methods=['DELETE'])
+def face_remove_known(face_id):
+    """删除已知人脸"""
+    success = face_engine.remove_known_face(face_id)
+    if success:
+        return jsonify({'message': f'已删除人脸: {face_id}', 'message_en': f'Face removed: {face_id}'})
+    return jsonify({'error': f'未找到人脸: {face_id}', 'error_en': f'Face not found: {face_id}'}), 404
 
 # ==================== API: Home Assistant 硬件接口 ====================
 

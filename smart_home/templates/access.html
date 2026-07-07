@@ -50,20 +50,43 @@
                     <h3 data-i18n="access.verify">门禁验证 (模拟)</h3>
                 </div>
                 <div class="card-body">
-                    <div class="access-scan" id="accessScan">
-                        <div class="scan-area">
-                            <svg viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="2" class="scan-icon">
-                                <rect x="10" y="10" width="60" height="60" rx="4" stroke-dasharray="8 4"/>
-                                <path d="M25 40h30M40 25v30"/>
+                    <!-- 摄像头画面 -->
+                    <div class="face-camera" id="faceCamera">
+                        <video id="faceVideo" autoplay playsinline muted></video>
+                        <canvas id="faceCanvas" style="display:none"></canvas>
+                        <div class="face-overlay" id="faceOverlay">
+                            <div class="face-guide">
+                                <svg viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.5" class="face-guide-svg">
+                                    <ellipse cx="100" cy="85" rx="55" ry="65"/>
+                                    <circle cx="100" cy="85" r="42"/>
+                                    <ellipse cx="70" cy="72" rx="12" ry="8"/>
+                                    <ellipse cx="130" cy="72" rx="12" ry="8"/>
+                                    <circle cx="100" cy="90" r="5"/>
+                                    <path d="M85 105 Q100 115 115 105" fill="none"/>
+                                    <circle cx="100" cy="160" r="18"/>
+                                </svg>
+                                <span class="face-guide-label">人脸识别</span>
+                            </div>
+                        </div>
+                        <div class="face-scanning-ring" id="scanningRing">
+                            <div class="scanning-corner tl"></div>
+                            <div class="scanning-corner tr"></div>
+                            <div class="scanning-corner bl"></div>
+                            <div class="scanning-corner br"></div>
+                        </div>
+                        <div class="face-status-indicator" id="faceIndicator">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="face-icon">
+                                <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 6l-5 5"/>
                             </svg>
-                            <span class="scan-text" data-i18n="access.scan">模拟RFID刷卡</span>
+                            <span data-i18n="access.face_wait">等待人脸识别...</span>
                         </div>
                     </div>
                     <div class="access-result" id="accessResult"></div>
                     <div class="btn-group" style="margin-top:16px">
-                        <button class="btn" onclick="simulateAccess('RFID001')" data-i18n="access.btn_admin">刷卡 - 管理员</button>
-                        <button class="btn" onclick="simulateAccess('RFID002')" data-i18n="access.btn_family">刷卡 - 家庭成员A</button>
-                        <button class="btn btn-danger" onclick="simulateAccess('RFID999')" data-i18n="access.btn_unauth">刷卡 - 未授权</button>
+                        <button class="btn" onclick="simulateFace('admin')" data-i18n="access.face_admin">人脸识别 - 管理员</button>
+                        <button class="btn" onclick="simulateFace('family_a')" data-i18n="access.face_family">人脸识别 - 家庭成员A</button>
+                        <button class="btn btn-danger" onclick="simulateFace('unknown')" data-i18n="access.face_unknown">人脸识别 - 未授权</button>
+                        <button class="btn" onclick="startCamera()" data-i18n="access.camera_start" style="margin-left:auto">启动摄像头</button>
                     </div>
                 </div>
             </div>
@@ -86,7 +109,7 @@
                         <h4 data-i18n="access.add_person">添加授权人员</h4>
                         <div class="form-row">
                             <input type="text" id="newPersonName" placeholder="姓名" class="input-field" data-i18n-placeholder="access.name">
-                            <input type="text" id="newPersonRFID" placeholder="RFID标签" class="input-field" data-i18n-placeholder="access.rfid">
+                            <input type="text" id="newPersonRFID" placeholder="人脸ID" class="input-field" data-i18n-placeholder="access.face_id">
                             <button class="btn" onclick="addPerson()" data-i18n="access.add">添加</button>
                         </div>
                     </div>

@@ -1022,6 +1022,27 @@ body {
     color: var(--text-muted);
 }
 
+/* 只读输入框样式 */
+.input-readonly {
+    cursor: not-allowed;
+    opacity: 0.7;
+    background: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+.readonly-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: rgba(0, 229, 255, 0.15);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
 .loading {
     text-align: center;
     color: var(--text-muted);
@@ -1162,4 +1183,115 @@ body {
 }
 .entity-select:focus {
     border-color: var(--accent-cyan);
+}
+
+/* ==================== 人脸识别 ==================== */
+.face-camera {
+    position: relative;
+    width: 100%;
+    height: 240px;
+    background: #0a1520;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.face-camera video,
+.face-camera canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.face-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 21, 32, 0.6);
+}
+
+.face-guide {
+    text-align: center;
+    opacity: 0.5;
+}
+
+.face-guide-svg {
+    width: 120px;
+    height: 120px;
+    color: var(--accent-cyan);
+}
+
+.face-guide-label {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+}
+
+.scanning-corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: var(--accent-cyan);
+    border-style: solid;
+    border-width: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.scanning-corner.tl { top: 20px; left: 20px; border-top-width: 3px; border-left-width: 3px; border-radius: 4px 0 0 0; }
+.scanning-corner.tr { top: 20px; right: 20px; border-top-width: 3px; border-right-width: 3px; border-radius: 0 4px 0 0; }
+.scanning-corner.bl { bottom: 20px; left: 20px; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 4px; }
+.scanning-corner.br { bottom: 20px; right: 20px; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 4px 0; }
+
+.scanning .scanning-corner {
+    opacity: 1;
+    animation: cornerPulse 1.2s ease-in-out infinite;
+}
+@keyframes cornerPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+.scanning .face-guide-svg {
+    animation: scanLine 2s linear infinite;
+    stroke-dasharray: 300;
+    stroke-dashoffset: 0;
+    color: var(--accent-green);
+}
+@keyframes scanLine {
+    to { stroke-dashoffset: -600; }
+}
+
+.face-status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+    background: rgba(42, 74, 94, 0.3);
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    transition: var(--transition);
+}
+.face-status-indicator .face-icon {
+    width: 18px;
+    height: 18px;
+}
+.face-status-indicator.granted {
+    background: rgba(0, 230, 118, 0.2);
+    color: var(--accent-green);
+    border: 1px solid rgba(0, 230, 118, 0.3);
+}
+.face-status-indicator.denied {
+    background: rgba(255, 23, 68, 0.2);
+    color: var(--accent-red);
+    border: 1px solid rgba(255, 23, 68, 0.3);
 }
