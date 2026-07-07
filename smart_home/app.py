@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from database import db
 from datetime import datetime
+from ha_client import ha_client
 
 app = Flask(__name__)
 
@@ -20,6 +21,11 @@ def history_page():
 def access_page():
     """门禁管理页面"""
     return render_template('access.html')
+
+@app.route('/hardware')
+def hardware_page():
+    """硬件管理页面"""
+    return render_template('hardware.html')
 
 # ==================== API: 系统状态 ====================
 
@@ -218,6 +224,114 @@ def get_statistics():
     """获取全部统计信息"""
     stats = db.get_statistics()
     return jsonify(stats)
+
+# ==================== API: Home Assistant 硬件接口 ====================
+
+@app.route('/api/ha/connection', methods=['GET'])
+def ha_test_connection():
+    """测试HA连接"""
+    result = ha_client.test_connection()
+    return jsonify(result)
+
+@app.route('/api/ha/config', methods=['GET'])
+def ha_get_config():
+    """获取HA系统信息"""
+    config = ha_client.get_config()
+    mapping = ha_client.get_device_mapping()
+    return jsonify({'ha_config': config, 'device_mapping': mapping, 'ha_url': ha_client.base_url})
+
+@app.route('/api/ha/config', methods=['POST'])
+def ha_save_config():
+    """保存HA连接配置"""
+    data = request.json
+    ha_client.save_config(
+        data.get('ha_url', ''),
+        data.get('ha_token', ''),
+        data.get('device_mapping')
+    )
+    return jsonify({'message': '配置已保存', 'message_en': 'Configuration saved'})
+
+@app.route('/api/ha/devices', methods=['GET'])
+def ha_get_devices():
+    """获取所有设备"""
+    devices = ha_client.get_discovered_devices()
+    return jsonify(devices)
+
+@app.route('/api/ha/mapping', methods=['POST'])
+def ha_update_mapping():
+    """更新设备映射"""
+    data = request.json
+    device_type = data.get('device_type', '')
+    entity_id = data.get('entity_id', '')
+    ha_client.update_device_mapping(device_type, entity_id)
+    return jsonify({'message': '设备映射已更新', 'message_en': 'Device mapping updated'})
+
+@app.route('/api/ha/temperature', methods=['GET'])
+def ha_get_temperature():
+    """获取HA温度"""
+    temp = ha_client.get_temperature()
+    return jsonify({'temperature': temp})
+
+@app.route('/api/ha/humidity', methods=['GET'])
+def ha_get_humidity():
+    """获取HA湿度"""
+    humidity = ha_client.get_humidity()
+    return jsonify({'humidity': humidity})
+
+@app.route('/api/ha/light', methods=['POST'])
+def ha_control_light():
+    """通过HA控制灯光"""
+    data = request.json
+    result = ha_client.control_light(
+        action=data.get('action', 'toggle'),
+        brightness=data.get('brightness')
+    )
+    return jsonify(result)
+
+@app.route('/api/ha/fan', methods=['POST'])
+def ha_control_fan():
+    """通过HA控制风扇"""
+    data = request.json
+    result = ha_client.control_fan(speed_pct=data.get('speed'))
+    return jsonify(result)
+
+@app.route('/api/ha/ac', methods=['POST'])
+def ha_control_ac():
+    """通过HA控制空调"""
+    data = request.json
+    result = ha_client.control_ac(
+        mode=data.get('mode', 'off'),
+        temperature=data.get('temperature')
+    )
+    return jsonify(result)
+
+@app.route('/api/ha/door', methods=['POST'])
+def ha_control_door():
+    """通过HA控制门锁"""
+    data = request.json
+    result = ha_client.control_door(action=data.get('action', 'unlock'))
+    return jsonify(result)
+
+@app.route('/api/ha/door/status', methods=['GET'])
+def ha_get_door_status():
+    """获取HA门状态"""
+    status = ha_client.get_door_status()
+    return jsonify({'status': status})
+
+@app.route('/api/ha/window/status', methods=['GET'])
+def ha_get_window_status():
+    """获取HA窗户状态"""
+    status = ha_client.get_window_status()
+    return jsonify({'status': status})
+
+@app.route('/api/ha/camera', methods=['GET'])
+def ha_camera_snapshot():
+    """获取摄像头截图"""
+    from flask import Response
+    image = ha_client.get_camera_image()
+    if image:
+        return Response(image, mimetype='image/jpeg')
+    return jsonify({'error': '无法获取图像'}), 404
 
 # ==================== 启动 ====================
 

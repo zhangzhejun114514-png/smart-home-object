@@ -1093,3 +1093,73 @@ body {
         align-items: stretch;
     }
 }
+
+/* ==================== 硬件管理页面 ==================== */
+.ha-status-badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(42, 74, 94, 0.5);
+    color: var(--text-muted);
+    border: 1px solid transparent;
+}
+.ha-status-badge.connected {
+    background: rgba(0, 230, 118, 0.15);
+    color: var(--accent-green);
+    border-color: rgba(0, 230, 118, 0.3);
+}
+.ha-status-badge.error {
+    background: rgba(255, 23, 68, 0.15);
+    color: var(--accent-red);
+    border-color: rgba(255, 23, 68, 0.3);
+}
+
+.form-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.form-group {
+    flex: 1;
+    min-width: 200px;
+}
+.form-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.form-group .input-field {
+    width: 100%;
+}
+
+.ha-info {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: none;
+}
+.ha-info.show {
+    display: block;
+}
+
+.entity-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    outline: none;
+    max-width: 280px;
+    cursor: pointer;
+}
+.entity-select:focus {
+    border-color: var(--accent-cyan);
+}

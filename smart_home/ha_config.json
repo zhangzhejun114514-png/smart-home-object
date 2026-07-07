@@ -1,0 +1,18 @@
+{
+  "ha_url": "http://localhost:8123",
+  "ha_token": "",
+  "device_mapping": {
+    "temperature_sensor": "sensor.indoor_temperature",
+    "humidity_sensor": "sensor.indoor_humidity",
+    "front_door": "binary_sensor.front_door",
+    "living_window": "binary_sensor.living_room_window",
+    "main_light": "light.living_room",
+    "fan": "fan.smart_fan",
+    "ac": "climate.smart_ac",
+    "door_lock": "lock.front_door",
+    "camera": "camera.security_camera"
+  },
+  "poll_interval": 10,
+  "ha_username": "Group42",
+  "ha_password": "Mind@123"
+}
