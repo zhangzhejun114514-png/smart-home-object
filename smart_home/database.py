@@ -113,10 +113,10 @@ class SmartHomeDB:
             while True:
                 try:
                     self._simulate_temperature()
-                    time.sleep(30)  # 每30秒模拟一次数据
+                    time.sleep(120)  # 每2分钟模拟一次数据
                 except Exception as e:
                     print(f"Simulation error: {e}")
-                    time.sleep(30)
+                    time.sleep(120)
         
         thread = threading.Thread(target=simulate, daemon=True)
         thread.start()
