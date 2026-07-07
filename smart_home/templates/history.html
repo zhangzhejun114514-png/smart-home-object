@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -25,8 +25,14 @@
             <span class="status-dot online"></span>
             <span data-i18n="system.online">系统在线</span>
             <span id="currentTime" class="time-display">--:--:--</span>
-            <button class="btn btn-sm lang-switch" onclick="setLang(I18N.currentLang === 'zh' ? 'en' : 'zh')" data-i18n="nav.lang">EN</button>
         </div>
+        <button class="lang-switch" onclick="setLang(I18N.currentLang === 'zh' ? 'en' : 'zh')" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+            </svg>
+            <span data-i18n="nav.lang">EN</span>
+        </button>
     </nav>
 
     <div id="notification" class="notification hidden"></div>
