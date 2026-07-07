@@ -12,7 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function updateClock() {
     const now = new Date();
     const el = document.getElementById('currentTime');
-    if (el) el.textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+    const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+    if (el) el.textContent = now.toLocaleTimeString(locale, { hour12: false });
 }
 
 // API
@@ -104,29 +105,29 @@ async function loadHistory() {
     switch (dataType) {
         case 'temperature':
             data = await apiGet(`/api/temperature?hours=${hours}`);
-            title = '温度历史趋势';
-            chartLabel = '温度 (°C)';
+            title = t('chart.temp_history');
+            chartLabel = t('chart.temp');
             chartColor = '#00e5ff';
             chartBgColor = 'rgba(0, 229, 255, 0.1)';
             break;
         case 'humidity':
             data = await apiGet(`/api/temperature?hours=${hours}`);
-            title = '湿度历史趋势';
-            chartLabel = '湿度 (%)';
+            title = t('chart.humidity_history');
+            chartLabel = t('chart.humidity');
             chartColor = '#00b4d8';
             chartBgColor = 'rgba(0, 180, 216, 0.1)';
             break;
         case 'door_window':
             data = await apiGet(`/api/door_window/history?hours=${hours}`);
-            title = '门窗状态历史';
-            chartLabel = '状态 (1=开/0=关)';
+            title = t('chart.door_history');
+            chartLabel = t('chart.door_status');
             chartColor = '#00e676';
             chartBgColor = 'rgba(0, 230, 118, 0.1)';
             break;
         case 'light':
             data = await apiGet(`/api/light/history?hours=${hours}`);
-            title = '灯光亮度历史';
-            chartLabel = '亮度 (%)';
+            title = t('chart.light_history');
+            chartLabel = t('chart.light_brightness');
             chartColor = '#ffea00';
             chartBgColor = 'rgba(255, 234, 0, 0.1)';
             break;
@@ -143,7 +144,8 @@ async function loadHistory() {
     if (historyChart) {
         const labels = reversed.map(d => {
             const dt = new Date(d.timestamp);
-            return dt.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+            return dt.toLocaleString(locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         });
         
         let values;
@@ -197,22 +199,22 @@ async function loadHistory() {
 function updateTable(dataType, data) {
     const header = document.getElementById('tableHeader');
     const body = document.getElementById('tableBody');
-    document.getElementById('recordCount').textContent = `共 ${data.length} 条记录`;
+    document.getElementById('recordCount').textContent = t('history.records_count', data.length);
     
-    let headerHTML = '<th>时间</th>';
+    let headerHTML = '<th>' + t('history.time') + '</th>';
     
     switch (dataType) {
         case 'temperature':
-            headerHTML += '<th>温度 (°C)</th><th>湿度 (%)</th>';
+            headerHTML += '<th>' + t('chart.temp') + '</th><th>' + t('chart.humidity') + '</th>';
             break;
         case 'humidity':
-            headerHTML += '<th>湿度 (%)</th><th>温度 (°C)</th>';
+            headerHTML += '<th>' + t('chart.humidity') + '</th><th>' + t('chart.temp') + '</th>';
             break;
         case 'door_window':
-            headerHTML += '<th>设备类型</th><th>设备名称</th><th>状态</th>';
+            headerHTML += '<th>' + t('history.device_type') + '</th><th>' + t('history.device_name') + '</th><th>' + t('history.status') + '</th>';
             break;
         case 'light':
-            headerHTML += '<th>灯光名称</th><th>状态</th><th>亮度 (%)</th>';
+            headerHTML += '<th>' + t('history.light_name') + '</th><th>' + t('history.status') + '</th><th>' + t('history.brightness') + '</th>';
             break;
     }
     header.innerHTML = headerHTML;
@@ -223,7 +225,8 @@ function updateTable(dataType, data) {
     
     displayData.forEach(d => {
         const dt = new Date(d.timestamp);
-        const timeStr = dt.toLocaleString('zh-CN');
+        const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+        const timeStr = dt.toLocaleString(locale);
         bodyHTML += `<tr><td>${timeStr}</td>`;
         
         switch (dataType) {
@@ -247,5 +250,5 @@ function updateTable(dataType, data) {
         bodyHTML += '</tr>';
     });
     
-    body.innerHTML = bodyHTML || '<tr><td colspan="5">暂无数据</td></tr>';
+    body.innerHTML = bodyHTML || '<tr><td colspan="5">' + t('history.no_data') + '</td></tr>';
 }

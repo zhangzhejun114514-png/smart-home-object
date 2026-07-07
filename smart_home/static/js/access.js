@@ -11,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function updateClock() {
     const now = new Date();
     const el = document.getElementById('currentTime');
-    if (el) el.textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+    const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+    if (el) el.textContent = now.toLocaleTimeString(locale, { hour12: false });
 }
 
 // 通知
@@ -55,7 +56,7 @@ async function simulateAccess(rfidTag) {
     
     // 扫描动画
     scanArea.classList.add('scanning');
-    resultEl.textContent = '验证中...';
+    resultEl.textContent = t('access.verifying');
     resultEl.className = 'access-result';
     
     // 模拟延迟
@@ -67,11 +68,11 @@ async function simulateAccess(rfidTag) {
             if (res.granted) {
                 resultEl.textContent = `${res.message}`;
                 resultEl.className = 'access-result granted';
-                showNotification(`门禁验证通过: ${res.person}`, 'success');
+                showNotification(t('notify.access_granted', res.person), 'success');
             } else {
                 resultEl.textContent = res.message;
                 resultEl.className = 'access-result denied';
-                showNotification('门禁验证失败: 未授权人员', 'error');
+                showNotification(t('notify.access_denied'), 'error');
             }
             // 刷新日志
             loadAccessLogs();
@@ -97,14 +98,14 @@ async function loadPersons() {
                     <div class="person-avatar" style="background: ${color}">${initial}</div>
                     <div>
                         <div class="person-name">${p.name}</div>
-                        <div class="person-rfid">RFID: ${p.rfid_tag || '未设置'}</div>
+                        <div class="person-rfid">RFID: ${p.rfid_tag || t('access.unset')}</div>
                     </div>
                 </div>
             </div>
         `;
     });
     
-    listEl.innerHTML = html || '<div class="loading">暂无授权人员</div>';
+    listEl.innerHTML = html || '<div class="loading">' + t('access.no_persons') + '</div>';
 }
 
 async function addPerson() {
@@ -114,19 +115,21 @@ async function addPerson() {
     const rfid = rfidInput.value.trim();
     
     if (!name) {
-        showNotification('请输入姓名', 'error');
+        showNotification(t('notify.enter_name'), 'error');
         return;
     }
     
     const res = await apiPost('/api/access/persons', { name: name, rfid_tag: rfid });
     if (res) {
         if (res.message) {
-            showNotification(res.message, 'success');
+            const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+            showNotification(msg, 'success');
             nameInput.value = '';
             rfidInput.value = '';
             loadPersons();
         } else if (res.error) {
-            showNotification(res.error, 'error');
+            const err = I18N.currentLang === 'en' ? (res.error_en || res.error) : res.error;
+            showNotification(err, 'error');
         }
     }
 }
@@ -141,9 +144,10 @@ async function loadAccessLogs() {
     
     logs.forEach(log => {
         const dt = new Date(log.timestamp);
-        const timeStr = dt.toLocaleString('zh-CN');
+        const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+        const timeStr = dt.toLocaleString(locale);
         const statusClass = log.status === 'granted' ? 'granted' : 'denied';
-        const statusText = log.status === 'granted' ? '通过' : '拒绝';
+        const statusText = log.status === 'granted' ? t('access.log_granted') : t('access.log_denied');
         
         html += `
             <tr>
@@ -155,5 +159,5 @@ async function loadAccessLogs() {
         `;
     });
     
-    body.innerHTML = html || '<tr><td colspan="4">暂无记录</td></tr>';
+    body.innerHTML = html || '<tr><td colspan="4">' + t('access.no_records') + '</td></tr>';
 }

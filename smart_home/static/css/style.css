@@ -124,6 +124,24 @@ body {
     border-radius: 6px;
 }
 
+.lang-switch {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--accent-cyan);
+    background: rgba(0, 229, 255, 0.1);
+    color: var(--accent-cyan);
+    cursor: pointer;
+    transition: var(--transition);
+    margin-left: 8px;
+}
+
+.lang-switch:hover {
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+}
+
 /* ==================== 通知 ==================== */
 .notification {
     position: fixed;

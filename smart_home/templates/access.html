@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>门禁管理 - 智能家居</title>
+    <title data-i18n="access.title">门禁管理 - 智能家居</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -13,17 +13,18 @@
                 <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
                 <polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
-            <span>智能家居控制系统</span>
+            <span data-i18n="system.title">智能家居控制系统</span>
         </div>
         <div class="nav-links">
-            <a href="/" class="nav-link">仪表盘</a>
-            <a href="/history" class="nav-link">历史数据</a>
-            <a href="/access" class="nav-link active">门禁管理</a>
+            <a href="/" class="nav-link" data-i18n="nav.dashboard">仪表盘</a>
+            <a href="/history" class="nav-link" data-i18n="nav.history">历史数据</a>
+            <a href="/access" class="nav-link active" data-i18n="nav.access">门禁管理</a>
         </div>
         <div class="nav-status">
             <span class="status-dot online"></span>
-            <span>系统在线</span>
+            <span data-i18n="system.online">系统在线</span>
             <span id="currentTime" class="time-display">--:--:--</span>
+            <button class="btn btn-sm lang-switch" onclick="setLang(I18N.currentLang === 'zh' ? 'en' : 'zh')" data-i18n="nav.lang">EN</button>
         </div>
     </nav>
 
@@ -39,7 +40,7 @@
                         <circle cx="12" cy="16" r="1"/>
                         <path d="M7 11V7a5 5 0 0110 0v4"/>
                     </svg>
-                    <h3>门禁验证 (模拟)</h3>
+                    <h3 data-i18n="access.verify">门禁验证 (模拟)</h3>
                 </div>
                 <div class="card-body">
                     <div class="access-scan" id="accessScan">
@@ -48,14 +49,14 @@
                                 <rect x="10" y="10" width="60" height="60" rx="4" stroke-dasharray="8 4"/>
                                 <path d="M25 40h30M40 25v30"/>
                             </svg>
-                            <span class="scan-text">模拟RFID刷卡</span>
+                            <span class="scan-text" data-i18n="access.scan">模拟RFID刷卡</span>
                         </div>
                     </div>
                     <div class="access-result" id="accessResult"></div>
                     <div class="btn-group" style="margin-top:16px">
-                        <button class="btn" onclick="simulateAccess('RFID001')">刷卡 - 管理员</button>
-                        <button class="btn" onclick="simulateAccess('RFID002')">刷卡 - 家庭成员A</button>
-                        <button class="btn btn-danger" onclick="simulateAccess('RFID999')">刷卡 - 未授权</button>
+                        <button class="btn" onclick="simulateAccess('RFID001')" data-i18n="access.btn_admin">刷卡 - 管理员</button>
+                        <button class="btn" onclick="simulateAccess('RFID002')" data-i18n="access.btn_family">刷卡 - 家庭成员A</button>
+                        <button class="btn btn-danger" onclick="simulateAccess('RFID999')" data-i18n="access.btn_unauth">刷卡 - 未授权</button>
                     </div>
                 </div>
             </div>
@@ -68,18 +69,18 @@
                         <circle cx="9" cy="7" r="4"/>
                         <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
                     </svg>
-                    <h3>授权人员</h3>
+                    <h3 data-i18n="access.persons">授权人员</h3>
                 </div>
                 <div class="card-body">
                     <div class="person-list" id="personList">
-                        <div class="loading">加载中...</div>
+                        <div class="loading" data-i18n="history.loading">加载中...</div>
                     </div>
                     <div class="add-person">
-                        <h4>添加授权人员</h4>
+                        <h4 data-i18n="access.add_person">添加授权人员</h4>
                         <div class="form-row">
-                            <input type="text" id="newPersonName" placeholder="姓名" class="input-field">
-                            <input type="text" id="newPersonRFID" placeholder="RFID标签" class="input-field">
-                            <button class="btn" onclick="addPerson()">添加</button>
+                            <input type="text" id="newPersonName" placeholder="姓名" class="input-field" data-i18n-placeholder="access.name">
+                            <input type="text" id="newPersonRFID" placeholder="RFID标签" class="input-field" data-i18n-placeholder="access.rfid">
+                            <button class="btn" onclick="addPerson()" data-i18n="access.add">添加</button>
                         </div>
                     </div>
                 </div>
@@ -95,22 +96,22 @@
                     <line x1="16" y1="13" x2="8" y2="13"/>
                     <line x1="16" y1="17" x2="8" y2="17"/>
                 </svg>
-                <h3>门禁访问日志</h3>
-                <button class="btn btn-sm" onclick="loadAccessLogs()">刷新</button>
+                <h3 data-i18n="access.logs">门禁访问日志</h3>
+                <button class="btn btn-sm" onclick="loadAccessLogs()" data-i18n="access.refresh">刷新</button>
             </div>
             <div class="card-body">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>时间</th>
-                                <th>人员</th>
-                                <th>验证方式</th>
-                                <th>状态</th>
+                                <th data-i18n="access.log_time">时间</th>
+                                <th data-i18n="access.log_person">人员</th>
+                                <th data-i18n="access.log_method">验证方式</th>
+                                <th data-i18n="access.log_status">状态</th>
                             </tr>
                         </thead>
                         <tbody id="accessLogBody">
-                            <tr><td colspan="4">加载中...</td></tr>
+                            <tr><td colspan="4" data-i18n="history.loading">加载中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -118,6 +119,7 @@
         </div>
     </main>
 
+    <script src="{{ url_for('static', filename='js/lang.js') }}"></script>
     <script src="{{ url_for('static', filename='js/access.js') }}"></script>
 </body>
 </html>

@@ -64,7 +64,8 @@ def control_door():
         return jsonify({'error': '无效状态，只能是 open 或 closed'}), 400
     db.update_status(door_status=new_status)
     db.add_door_window_event('door', '前门', new_status)
-    return jsonify({'door_status': new_status, 'message': f'门已{("打开" if new_status == "open" else "关闭")}'})
+    action = 'opened' if new_status == 'open' else 'closed'
+    return jsonify({'door_status': new_status, 'message': f'门已{"打开" if new_status == "open" else "关闭"}', 'message_en': f'Door {action}'})
 
 @app.route('/api/window', methods=['GET'])
 def get_window_status():
@@ -81,7 +82,8 @@ def control_window():
         return jsonify({'error': '无效状态'}), 400
     db.update_status(window_status=new_status)
     db.add_door_window_event('window', '客厅窗户', new_status)
-    return jsonify({'window_status': new_status, 'message': f'窗户已{("打开" if new_status == "open" else "关闭")}'})
+    action = 'opened' if new_status == 'open' else 'closed'
+    return jsonify({'window_status': new_status, 'message': f'窗户已{"打开" if new_status == "open" else "关闭"}', 'message_en': f'Window {action}'})
 
 @app.route('/api/door_window/history', methods=['GET'])
 def get_door_window_history():
@@ -114,7 +116,8 @@ def control_light():
     return jsonify({
         'light_status': light_status,
         'light_brightness': brightness,
-        'message': f'灯光已{("打开" if light_status == "on" else "关闭")}，亮度: {brightness}%'
+        'message': f'灯光已{"打开" if light_status == "on" else "关闭"}，亮度: {brightness}%',
+        'message_en': f'Light {"turned on" if light_status == "on" else "turned off"}, brightness: {brightness}%'
     })
 
 @app.route('/api/light/history', methods=['GET'])
@@ -139,7 +142,7 @@ def control_fan():
     fan_speed = data.get('speed', 0)
     fan_speed = max(0, min(100, fan_speed))
     db.update_status(fan_speed=fan_speed)
-    return jsonify({'fan_speed': fan_speed, 'message': f'风扇速度已设为 {fan_speed}%'})
+    return jsonify({'fan_speed': fan_speed, 'message': f'风扇速度已设为 {fan_speed}%', 'message_en': f'Fan speed set to {fan_speed}%'})
 
 # ==================== API: 空调 ====================
 
@@ -164,7 +167,8 @@ def control_ac():
     return jsonify({
         'ac_status': ac_status,
         'ac_temperature': ac_temp,
-        'message': f'空调已{("开启" if ac_status == "on" else "关闭")}，温度设为 {ac_temp}°C'
+        'message': f'空调已{"开启" if ac_status == "on" else "关闭"}，温度设为 {ac_temp}°C',
+        'message_en': f'AC {"turned on" if ac_status == "on" else "turned off"}, temp set to {ac_temp}°C'
     })
 
 # ==================== API: 门禁 ====================
@@ -185,10 +189,10 @@ def verify_access():
     for person in persons:
         if person.get('rfid_tag') == rfid_tag:
             db.add_access_log(person['name'], 'rfid', 'granted')
-            return jsonify({'granted': True, 'person': person['name'], 'message': f'欢迎, {person["name"]}!'})
+            return jsonify({'granted': True, 'person': person['name'], 'message': f'欢迎, {person["name"]}!', 'message_en': f'Welcome, {person["name"]}!'})
     
     db.add_access_log('未知人员', 'rfid', 'denied')
-    return jsonify({'granted': False, 'person': None, 'message': '未授权，访问被拒绝'})
+    return jsonify({'granted': False, 'person': None, 'message': '未授权，访问被拒绝', 'message_en': 'Unauthorized, access denied'})
 
 @app.route('/api/access/persons', methods=['GET'])
 def get_persons():
@@ -204,8 +208,8 @@ def add_person():
     rfid_tag = data.get('rfid_tag', '')
     success = db.add_authorized_person(name, rfid_tag=rfid_tag)
     if success:
-        return jsonify({'message': f'已添加授权人员: {name}'})
-    return jsonify({'error': f'人员 {name} 已存在'}), 400
+        return jsonify({'message': f'已添加授权人员: {name}', 'message_en': f'Authorized person added: {name}'})
+    return jsonify({'error': f'人员 {name} 已存在', 'error_en': f'Person {name} already exists'}), 400
 
 # ==================== API: 统计 ====================
 

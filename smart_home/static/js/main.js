@@ -18,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==================== 时钟 ====================
 function updateClock() {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+    const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+    const timeStr = now.toLocaleTimeString(locale, { hour12: false });
     const el = document.getElementById('currentTime');
     if (el) el.textContent = timeStr;
 }
@@ -85,13 +86,13 @@ function updateUI(data) {
     // 温度告警
     const alertEl = document.getElementById('tempAlert');
     if (temp >= 30) {
-        alertEl.textContent = '过高';
+        alertEl.textContent = t('temp.too_high');
         alertEl.className = 'card-badge danger';
     } else if (temp >= 28) {
-        alertEl.textContent = '偏高';
+        alertEl.textContent = t('temp.high_warn');
         alertEl.className = 'card-badge warning';
     } else {
-        alertEl.textContent = '正常';
+        alertEl.textContent = t('temp.normal');
         alertEl.className = 'card-badge';
     }
     
@@ -120,7 +121,7 @@ function updateUI(data) {
     document.getElementById('acTempDisplay').textContent = acTemp;
     document.getElementById('acTempSlider').value = acTemp;
     document.getElementById('acTempSliderValue').textContent = acTemp + '°C';
-    document.getElementById('acBadge').textContent = acOn ? '运行中' : '关闭';
+    document.getElementById('acBadge').textContent = acOn ? t('ac.running') : t('ac.off');
     document.getElementById('acBadge').className = acOn ? 'ac-status-badge on' : 'ac-status-badge';
     document.getElementById('acPowerBtn').className = acOn ? 'btn btn-ac btn-power active' : 'btn btn-ac btn-power';
 }
@@ -136,7 +137,7 @@ function updateFanAnimation(speed) {
 function updateDoorWindowUI(type, status) {
     const statusEl = document.getElementById(type + 'Status');
     const iconEl = document.getElementById(type + 'Icon');
-    statusEl.textContent = status === 'open' ? '已打开' : '已关闭';
+    statusEl.textContent = status === 'open' ? t('door.opened') : t('door.closed');
     statusEl.className = 'dw-status ' + status;
     if (iconEl) {
         iconEl.className = 'dw-icon' + (status === 'open' ? ' open' : '');
@@ -152,7 +153,8 @@ async function setFan(speed) {
         document.getElementById('fanSpeed').value = speed;
         document.getElementById('fanSpeedValue').textContent = speed + '%';
         updateFanAnimation(speed);
-        showNotification(res.message, 'success');
+        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+        showNotification(msg, 'success');
     }
 }
 
@@ -162,7 +164,8 @@ async function toggleDoor() {
     const newStatus = current === 'closed' ? 'open' : 'closed';
     const res = await apiPost('/api/door', { status: newStatus });
     if (res) {
-        showNotification(res.message, 'success');
+        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+        showNotification(msg, 'success');
         loadStatus();
     }
 }
@@ -173,7 +176,8 @@ async function toggleWindow() {
     const newStatus = current === 'closed' ? 'open' : 'closed';
     const res = await apiPost('/api/window', { status: newStatus });
     if (res) {
-        showNotification(res.message, 'success');
+        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+        showNotification(msg, 'success');
         loadStatus();
     }
 }
@@ -187,7 +191,8 @@ async function setLight(status, brightness) {
         document.getElementById('bulb').className = status === 'on' ? 'bulb on' : 'bulb';
         document.getElementById('bulb').style.opacity = brightness / 100;
         document.getElementById('lightIndicator').className = status === 'on' ? 'light-indicator on' : 'light-indicator';
-        showNotification(res.message, 'success');
+        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+        showNotification(msg, 'success');
     }
 }
 
@@ -198,7 +203,8 @@ async function toggleAC() {
     const temp = currentStatus.ac_temperature || 26;
     const res = await apiPost('/api/ac', { status: newStatus, temperature: temp });
     if (res) {
-        showNotification(res.message, 'success');
+        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+        showNotification(msg, 'success');
         loadStatus();
     }
 }
@@ -209,7 +215,8 @@ async function adjustAC(delta) {
     const status = currentStatus.ac_status === 'on' ? 'on' : 'on'; // 调温度自动开
     const res = await apiPost('/api/ac', { status: 'on', temperature: newTemp });
     if (res) {
-        showNotification(res.message, 'success');
+        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
+        showNotification(msg, 'success');
         loadStatus();
     }
 }
@@ -225,12 +232,12 @@ async function remoteControl(action) {
             break;
         case 'ac_on':
             await apiPost('/api/ac', { status: 'on', temperature: 26 });
-            showNotification('空调已开启', 'success');
+            showNotification(t('notify.ac_on'), 'success');
             loadStatus();
             break;
         case 'ac_off':
             await apiPost('/api/ac', { status: 'off', temperature: 26 });
-            showNotification('空调已关闭', 'success');
+            showNotification(t('notify.ac_off'), 'success');
             loadStatus();
             break;
         case 'fan_on':
@@ -259,7 +266,7 @@ function initTempChart() {
             labels: [],
             datasets: [
                 {
-                    label: '温度 (°C)',
+                    label: t('chart.temp'),
                     data: [],
                     borderColor: '#00e5ff',
                     backgroundColor: 'rgba(0, 229, 255, 0.1)',
@@ -271,7 +278,7 @@ function initTempChart() {
                     pointHoverBackgroundColor: '#00e5ff'
                 },
                 {
-                    label: '湿度 (%)',
+                    label: t('chart.humidity'),
                     data: [],
                     borderColor: '#00b4d8',
                     backgroundColor: 'rgba(0, 180, 216, 0.05)',
@@ -341,7 +348,8 @@ async function loadTempHistory() {
     const reversed = [...data].reverse();
     const labels = reversed.map(d => {
         const dt = new Date(d.timestamp);
-        return dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
+        return dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     });
     const temps = reversed.map(d => d.temperature);
     const humidities = reversed.map(d => d.humidity);
