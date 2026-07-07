@@ -304,6 +304,55 @@ class SmartHomeDB:
             conn.close()
             return False
     
+    def update_authorized_person(self, person_id, name=None, rfid_tag=None, face_id=None):
+        """修改授权人员信息"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        updates = []
+        values = []
+
+        if name is not None and str(name).strip() != '':
+            updates.append("name = ?")
+            values.append(str(name).strip())
+
+        if rfid_tag is not None:
+            updates.append("rfid_tag = ?")
+            values.append(str(rfid_tag).strip() if str(rfid_tag).strip() else None)
+
+        if face_id is not None:
+            updates.append("face_id = ?")
+            values.append(str(face_id).strip() if str(face_id).strip() else None)
+
+        if not updates:
+            conn.close()
+            return False
+
+        values.append(person_id)
+
+        try:
+            cursor.execute(
+                f"UPDATE authorized_persons SET {', '.join(updates)} WHERE id = ?",
+                values
+            )
+            conn.commit()
+            success = cursor.rowcount > 0
+            conn.close()
+            return success
+        except sqlite3.IntegrityError:
+            conn.close()
+            return False
+
+    def delete_authorized_person(self, person_id):
+        """删除授权人员"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM authorized_persons WHERE id = ?', (person_id,))
+        conn.commit()
+        success = cursor.rowcount > 0
+        conn.close()
+        return success
+
     def get_statistics(self):
         """获取统计数据"""
         conn = self.get_connection()

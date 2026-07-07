@@ -211,6 +211,33 @@ def add_person():
         return jsonify({'message': f'已添加授权人员: {name}', 'message_en': f'Authorized person added: {name}'})
     return jsonify({'error': f'人员 {name} 已存在', 'error_en': f'Person {name} already exists'}), 400
 
+@app.route('/api/access/persons/<int:person_id>', methods=['PUT'])
+def update_person(person_id):
+    """修改授权人员"""
+    data = request.json
+    name = data.get('name')
+    rfid_tag = data.get('rfid_tag')
+    face_id = data.get('face_id')
+
+    success = db.update_authorized_person(
+        person_id,
+        name=name,
+        rfid_tag=rfid_tag,
+        face_id=face_id
+    )
+
+    if success:
+        return jsonify({'message': '授权人员信息已更新', 'message_en': 'Authorized person updated'})
+    return jsonify({'error': '更新失败，人员不存在或姓名重复', 'error_en': 'Update failed: person not found or duplicate name'}), 400
+
+@app.route('/api/access/persons/<int:person_id>', methods=['DELETE'])
+def delete_person(person_id):
+    """删除授权人员"""
+    success = db.delete_authorized_person(person_id)
+    if success:
+        return jsonify({'message': '授权人员已删除', 'message_en': 'Authorized person deleted'})
+    return jsonify({'error': '删除失败，人员不存在', 'error_en': 'Delete failed: person not found'}), 404
+
 # ==================== API: 统计 ====================
 
 @app.route('/api/statistics', methods=['GET'])
