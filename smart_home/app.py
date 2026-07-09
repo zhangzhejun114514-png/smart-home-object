@@ -358,6 +358,95 @@ def face_remove_known(face_id):
         return jsonify({'message': f'已删除人脸: {face_id}', 'message_en': f'Face removed: {face_id}'})
     return jsonify({'error': f'未找到人脸: {face_id}', 'error_en': f'Face not found: {face_id}'}), 404
 
+# ==================== API: 香橙派人脸识别结果推送 ====================
+
+@app.route('/api/face/notify', methods=['POST'])
+def face_notify():
+    """香橙派人脸识别结果推送接口
+    
+    由香橙派上独立运行的人脸识别脚本调用，将识别结果推送到GUI。
+    收到推送后：
+    1. 保存识别事件到数据库
+    2. 自动验证门禁权限
+    3. 返回验证结果给香橙派
+    
+    请求体示例:
+    {
+        "face_id": "FACE001",
+        "confidence": 0.95,
+        "image_path": "/tmp/face_001.jpg",
+        "device_source": "orange_pi"
+    }
+    """
+    data = request.json
+    face_id = data.get('face_id', '')
+    confidence = data.get('confidence')
+    image_path = data.get('image_path', '')
+    device_source = data.get('device_source', 'orange_pi')
+
+    if not face_id:
+        return jsonify({'error': '缺少 face_id', 'error_en': 'Missing face_id'}), 400
+
+    # 查询授权人员
+    persons = db.get_authorized_persons()
+    matched_person = None
+    for person in persons:
+        if person.get('face_id') == face_id:
+            matched_person = person
+            break
+
+    # 保存识别事件
+    person_name = matched_person['name'] if matched_person else None
+    event_id = db.add_face_event(
+        face_id=face_id,
+        person_name=person_name,
+        confidence=confidence,
+        image_path=image_path,
+        device_source=device_source
+    )
+
+    if matched_person:
+        # 授权人员 - 记录门禁日志并开门
+        db.add_access_log(matched_person['name'], 'face', 'granted')
+        if event_id:
+            db.update_face_event_status(event_id, 'granted', verified=True)
+        return jsonify({
+            'granted': True,
+            'person': matched_person['name'],
+            'face_id': face_id,
+            'event_id': event_id,
+            'message': f'欢迎 {matched_person["name"]}!',
+            'message_en': f'Welcome {matched_person["name"]}!'
+        })
+    else:
+        # 未授权人员
+        db.add_access_log('未知人员', 'face', 'denied')
+        if event_id:
+            db.update_face_event_status(event_id, 'denied', verified=False)
+        return jsonify({
+            'granted': False,
+            'person': None,
+            'face_id': face_id,
+            'event_id': event_id,
+            'message': '人脸未识别，访问被拒绝',
+            'message_en': 'Face not recognized, access denied'
+        })
+
+@app.route('/api/face/events', methods=['GET'])
+def face_get_events():
+    """获取人脸识别事件列表（供GUI轮询展示）"""
+    limit = request.args.get('limit', 20, type=int)
+    events = db.get_face_events(limit=limit)
+    return jsonify(events)
+
+@app.route('/api/face/events/latest', methods=['GET'])
+def face_get_latest_event():
+    """获取最新的人脸识别事件（供GUI实时展示）"""
+    event = db.get_latest_face_event()
+    if event:
+        return jsonify(event)
+    return jsonify({'message': '暂无识别事件', 'message_en': 'No face events yet'}), 200
+
 # ==================== API: Home Assistant 硬件接口 ====================
 
 @app.route('/api/ha/connection', methods=['GET'])
@@ -387,8 +476,13 @@ def ha_save_config():
 @app.route('/api/ha/devices', methods=['GET'])
 def ha_get_devices():
     """获取所有设备"""
-    devices = ha_client.get_discovered_devices()
-    return jsonify(devices)
+    try:
+        devices = ha_client.get_discovered_devices()
+        if not devices:
+            return jsonify({'devices': [], 'message': '未发现设备或HA未连接', 'message_en': 'No devices found or HA not connected'})
+        return jsonify(devices)
+    except Exception as e:
+        return jsonify({'devices': [], 'error': str(e), 'message': '获取设备失败', 'message_en': 'Failed to get devices'}), 200
 
 @app.route('/api/ha/mapping', methods=['POST'])
 def ha_update_mapping():
@@ -461,10 +555,28 @@ def ha_get_window_status():
 def ha_camera_snapshot():
     """获取摄像头截图"""
     from flask import Response
-    image = ha_client.get_camera_image()
-    if image:
-        return Response(image, mimetype='image/jpeg')
-    return jsonify({'error': '无法获取图像'}), 404
+    try:
+        image = ha_client.get_camera_image()
+        if image:
+            return Response(image, mimetype='image/jpeg')
+        return jsonify({'error': '无法获取图像，HA未连接或摄像头未配置', 'error_en': 'Cannot get image, HA not connected or camera not configured'}), 200
+    except Exception as e:
+        return jsonify({'error': f'获取摄像头图像失败: {str(e)}', 'error_en': f'Camera error: {str(e)}'}), 200
+
+@app.route('/api/ha/history', methods=['GET'])
+def ha_get_history():
+    """获取HA历史数据"""
+    entity_id = request.args.get('entity_id', '')
+    hours = request.args.get('hours', 24, type=int)
+    if not entity_id:
+        return jsonify({'error': '缺少 entity_id 参数', 'error_en': 'Missing entity_id parameter'}), 400
+    try:
+        from datetime import datetime, timedelta
+        start_time = (datetime.now() - timedelta(hours=hours)).isoformat()
+        history = ha_client.get_history([entity_id], start_time)
+        return jsonify({'history': history, 'entity_id': entity_id})
+    except Exception as e:
+        return jsonify({'error': str(e), 'history': []}), 200
 
 # ==================== 启动 ====================
 

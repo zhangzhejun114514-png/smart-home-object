@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -39,7 +39,7 @@
 
     <main class="main-content">
         <div class="dashboard-grid grid-2-1">
-            <!-- 门禁验证面板 -->
+            <!-- 实时识别结果面板 -->
             <div class="card card-access-panel">
                 <div class="card-header">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="card-icon">
@@ -47,46 +47,58 @@
                         <circle cx="12" cy="16" r="1"/>
                         <path d="M7 11V7a5 5 0 0110 0v4"/>
                     </svg>
-                    <h3 data-i18n="access.verify">门禁验证 (模拟)</h3>
+                    <h3 data-i18n="access.live_face">实时人脸识别</h3>
+                    <span class="face-poll-status" id="pollStatus">
+                        <span class="status-dot online"></span>
+                        <span data-i18n="access.listening">监听中</span>
+                    </span>
                 </div>
                 <div class="card-body">
-                    <!-- 摄像头画面 -->
-                    <div class="face-camera" id="faceCamera">
-                        <video id="faceVideo" autoplay playsinline muted></video>
-                        <canvas id="faceCanvas" style="display:none"></canvas>
-                        <div class="face-overlay" id="faceOverlay">
-                            <div class="face-guide">
-                                <svg viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.5" class="face-guide-svg">
-                                    <ellipse cx="100" cy="85" rx="55" ry="65"/>
-                                    <circle cx="100" cy="85" r="42"/>
-                                    <ellipse cx="70" cy="72" rx="12" ry="8"/>
-                                    <ellipse cx="130" cy="72" rx="12" ry="8"/>
-                                    <circle cx="100" cy="90" r="5"/>
-                                    <path d="M85 105 Q100 115 115 105" fill="none"/>
-                                    <circle cx="100" cy="160" r="18"/>
-                                </svg>
-                                <span class="face-guide-label">人脸识别</span>
+                    <!-- 最新识别结果展示 -->
+                    <div class="face-result-display" id="faceResultDisplay">
+                        <div class="face-result-waiting" id="faceResultWaiting">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="face-waiting-icon">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4l3 3"/>
+                            </svg>
+                            <p data-i18n="access.waiting_push">等待香橙派推送识别结果...</p>
+                            <p class="face-waiting-sub" data-i18n="access.waiting_sub">人脸识别在香橙派上独立运行</p>
+                        </div>
+                        <div class="face-result-content hidden" id="faceResultContent">
+                            <div class="face-result-status" id="faceResultStatus">
+                                <div class="face-result-icon" id="faceResultIcon"></div>
+                                <div class="face-result-info">
+                                    <div class="face-result-name" id="faceResultName">--</div>
+                                    <div class="face-result-meta" id="faceResultMeta">--</div>
+                                </div>
+                            </div>
+                            <div class="face-result-detail">
+                                <div class="detail-row">
+                                    <span class="detail-label" data-i18n="access.face_id">人脸ID</span>
+                                    <span class="detail-value" id="faceResultId">--</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label" data-i18n="access.confidence">置信度</span>
+                                    <span class="detail-value" id="faceResultConfidence">--</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label" data-i18n="access.time">识别时间</span>
+                                    <span class="detail-value" id="faceResultTime">--</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label" data-i18n="access.source">识别来源</span>
+                                    <span class="detail-value" id="faceResultSource">--</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="face-scanning-ring" id="scanningRing">
-                            <div class="scanning-corner tl"></div>
-                            <div class="scanning-corner tr"></div>
-                            <div class="scanning-corner bl"></div>
-                            <div class="scanning-corner br"></div>
-                        </div>
-                        <div class="face-status-indicator" id="faceIndicator">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="face-icon">
-                                <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 6l-5 5"/>
-                            </svg>
-                            <span data-i18n="access.face_wait">等待人脸识别...</span>
-                        </div>
                     </div>
+
+                    <!-- 模拟推送按钮（测试用） -->
                     <div class="access-result" id="accessResult"></div>
                     <div class="btn-group" style="margin-top:16px">
-                        <button class="btn" onclick="simulateFace('admin')" data-i18n="access.face_admin">人脸识别 - 管理员</button>
-                        <button class="btn" onclick="simulateFace('family_a')" data-i18n="access.face_family">人脸识别 - 家庭成员A</button>
-                        <button class="btn btn-danger" onclick="simulateFace('unknown')" data-i18n="access.face_unknown">人脸识别 - 未授权</button>
-                        <button class="btn" onclick="startCamera()" data-i18n="access.camera_start" style="margin-left:auto">启动摄像头</button>
+                        <button class="btn" onclick="simulatePush('FACE001', 0.95)" data-i18n="access.sim_admin">模拟推送 - 管理员</button>
+                        <button class="btn" onclick="simulatePush('FACE002', 0.88)" data-i18n="access.sim_family">模拟推送 - 家庭成员A</button>
+                        <button class="btn btn-danger" onclick="simulatePush('FACE999', 0.45)" data-i18n="access.sim_unknown">模拟推送 - 未知人员</button>
                     </div>
                 </div>
             </div>
@@ -113,6 +125,39 @@
                             <button class="btn" onclick="addPerson()" data-i18n="access.add">添加</button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 人脸识别事件记录 -->
+        <div class="card card-table" style="margin-top:20px">
+            <div class="card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="card-icon">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                <h3 data-i18n="access.face_events">人脸识别事件</h3>
+                <button class="btn btn-sm" onclick="loadFaceEvents()" data-i18n="access.refresh">刷新</button>
+            </div>
+            <div class="card-body">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="access.event_time">时间</th>
+                                <th data-i18n="access.event_person">人员</th>
+                                <th data-i18n="access.event_face_id">人脸ID</th>
+                                <th data-i18n="access.event_confidence">置信度</th>
+                                <th data-i18n="access.event_status">验证状态</th>
+                                <th data-i18n="access.event_source">来源</th>
+                            </tr>
+                        </thead>
+                        <tbody id="faceEventBody">
+                            <tr><td colspan="6" data-i18n="history.loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

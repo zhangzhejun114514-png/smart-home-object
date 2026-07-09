@@ -106,6 +106,21 @@ class SmartHomeDB:
                 INSERT OR IGNORE INTO system_status (id) VALUES (1)
             ''')
 
+            # 人脸识别事件表（香橙派推送的识别结果）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS face_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    face_id TEXT,
+                    person_name TEXT,
+                    confidence REAL,
+                    image_path TEXT,
+                    device_source TEXT DEFAULT 'orange_pi',
+                    status TEXT DEFAULT 'pending',
+                    verified BOOLEAN DEFAULT 0
+                )
+            ''')
+
             # 插入默认授权人员（含人脸ID）
             cursor.execute('''
                 INSERT OR IGNORE INTO authorized_persons (name, rfid_tag, face_id) VALUES
@@ -470,6 +485,91 @@ class SmartHomeDB:
         except Exception as e:
             logger.error(f"Get statistics error: {e}")
             return {}
+        finally:
+            if conn:
+                conn.close()
+
+    # ==================== 人脸识别事件 ====================
+
+    def add_face_event(self, face_id, person_name=None, confidence=None, image_path=None, device_source='orange_pi'):
+        """添加人脸识别事件（由香橙派推送）"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO face_events (face_id, person_name, confidence, image_path, device_source)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (face_id, person_name, confidence, image_path, device_source))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            logger.error(f"Add face event error: {e}")
+            if conn:
+                conn.rollback()
+            return None
+        finally:
+            if conn:
+                conn.close()
+
+    def get_face_events(self, limit=20):
+        """获取人脸识别事件列表"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM face_events
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (limit,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Get face events error: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
+    def get_latest_face_event(self):
+        """获取最新的人脸识别事件"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM face_events
+                ORDER BY timestamp DESC
+                LIMIT 1
+            ''')
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Get latest face event error: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+
+    def update_face_event_status(self, event_id, status, verified=False):
+        """更新人脸识别事件状态"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE face_events
+                SET status = ?, verified = ?
+                WHERE id = ?
+            ''', (status, verified, event_id))
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Update face event error: {e}")
+            if conn:
+                conn.rollback()
+            return False
         finally:
             if conn:
                 conn.close()
