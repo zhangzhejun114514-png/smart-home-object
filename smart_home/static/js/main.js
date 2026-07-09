@@ -1,30 +1,299 @@
-// ==================== 全局变量 ====================
-let tempChart = null;
-let currentStatus = {};
+// ==================== 主仪表盘 JS（稳定增强版）===========================
+// 增强特性：fetch 超时控制、断线检测、请求防抖、优雅降级
 
-// ==================== 初始化 ====================
-document.addEventListener('DOMContentLoaded', () => {
-    updateClock();
-    setInterval(updateClock, 1000);
-    loadStatus();
-    initTempChart();
-    loadTempHistory();
-    // 每5秒自动刷新状态
-    setInterval(loadStatus, 5000);
-    // 每30秒刷新图表
-    setInterval(loadTempHistory, 30000);
+let statusTimer = null;
+let currentLang = localStorage.getItem('smart_home_lang') || 'zh';
+let isOnline = true;           // 网络连接状态
+let lastStatusUpdate = Date.now();
+let pendingRequests = new Set(); // 跟踪进行中请求，防止并发堆积
+
+// ==================== 增强型 Fetch 工具 ====================
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    const requestKey = url + JSON.stringify(options.body || '');
+
+    // 防止相同请求并发堆积
+    if (pendingRequests.has(requestKey)) {
+        console.warn('Duplicate request blocked:', url);
+        return null;
+    }
+    pendingRequests.add(requestKey);
+
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+
+        // 标记网络已恢复
+        if (!isOnline) {
+            isOnline = true;
+            updateConnectionStatus(true);
+        }
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            console.warn('Request timeout:', url);
+        } else {
+            // 网络断开
+            if (isOnline) {
+                isOnline = false;
+                updateConnectionStatus(false);
+            }
+        }
+        return null;
+    } finally {
+        pendingRequests.delete(requestKey);
+    }
+}
+
+async function apiGet(url, timeoutMs = 8000) {
+    try {
+        const response = await fetchWithTimeout(url, {}, timeoutMs);
+        if (!response) return null;
+        return await response.json();
+    } catch (e) {
+        console.error('API GET error:', e);
+        return null;
+    }
+}
+
+async function apiPost(url, data, timeoutMs = 8000) {
+    try {
+        const response = await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }, timeoutMs);
+        if (!response) return null;
+        return await response.json();
+    } catch (e) {
+        console.error('API POST error:', e);
+        return null;
+    }
+}
+
+// ==================== 网络连接状态 ====================
+
+function updateConnectionStatus(online) {
+    const indicator = document.getElementById('connectionIndicator');
+    if (!indicator) return;
+
+    if (online) {
+        indicator.innerHTML = '<span style="color:#00e676;">&#9679;</span> ' + t('system.online');
+        indicator.className = 'connection-indicator online';
+    } else {
+        indicator.innerHTML = '<span style="color:#ff1744;">&#9679;</span> ' + t('system.offline');
+        indicator.className = 'connection-indicator offline';
+    }
+}
+
+// 监听浏览器网络状态
+window.addEventListener('online', () => {
+    isOnline = true;
+    updateConnectionStatus(true);
+    loadStatus(); // 断线恢复后立刻刷新数据
+});
+window.addEventListener('offline', () => {
+    isOnline = false;
+    updateConnectionStatus(false);
 });
 
-// ==================== 时钟 ====================
-function updateClock() {
-    const now = new Date();
-    const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
-    const timeStr = now.toLocaleTimeString(locale, { hour12: false });
-    const el = document.getElementById('currentTime');
-    if (el) el.textContent = timeStr;
+// ==================== 防抖工具 ====================
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// ==================== 初始化 ====================
+
+document.addEventListener('DOMContentLoaded', () => {
+    initCharts();
+    loadStatus();
+    startStatusPolling();
+    updateClock();
+    setInterval(updateClock, 1000);
+    initLanguageSwitch();
+});
+
+function startStatusPolling() {
+    // 清理旧定时器，防止重复
+    if (statusTimer) clearInterval(statusTimer);
+    statusTimer = setInterval(loadStatus, 5000);
+}
+
+// ==================== 语言切换 ====================
+
+function initLanguageSwitch() {
+    const btn = document.getElementById('langSwitch');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        const newLang = currentLang === 'zh' ? 'en' : 'zh';
+        I18N.setLang(newLang);
+        currentLang = newLang;
+        updateButtonLabel();
+        loadStatus();
+    });
+    updateButtonLabel();
+}
+
+function updateButtonLabel() {
+    const btn = document.getElementById('langSwitch');
+    if (!btn) return;
+    const span = btn.querySelector('span');
+    if (span) span.textContent = currentLang === 'zh' ? 'EN' : '中文';
+}
+
+// ==================== 数据加载 ====================
+
+async function loadStatus() {
+    // 离线时不发请求，避免请求堆积
+    if (!isOnline && !navigator.onLine) {
+        console.log('Offline, skipping status poll');
+        return;
+    }
+
+    const data = await apiGet('/api/status');
+    if (!data) {
+        // 请求失败但网络标记为在线时，降级为离线
+        if (isOnline) {
+            isOnline = false;
+            updateConnectionStatus(false);
+        }
+        return;
+    }
+
+    lastStatusUpdate = Date.now();
+    updateDashboard(data);
+}
+
+function updateDashboard(data) {
+    // 温度
+    const tempEl = document.getElementById('tempValue');
+    if (tempEl) tempEl.textContent = data.temperature ? data.temperature.toFixed(1) : '--';
+
+    const humEl = document.getElementById('humidityValue');
+    if (humEl) humEl.textContent = data.humidity ? data.humidity.toFixed(0) : '--';
+
+    // 风扇
+    const fanEl = document.getElementById('fanSpeed');
+    if (fanEl) fanEl.textContent = data.fan_speed || 0;
+
+    // 门窗
+    const doorEl = document.getElementById('doorStatus');
+    if (doorEl) {
+        const doorText = data.door_status === 'open' ? t('status.open') : t('status.closed');
+        doorEl.textContent = doorText;
+        doorEl.className = 'status-text ' + (data.door_status === 'open' ? 'warning' : 'normal');
+    }
+
+    const windowEl = document.getElementById('windowStatus');
+    if (windowEl) {
+        const windowText = data.window_status === 'open' ? t('status.open') : t('status.closed');
+        windowEl.textContent = windowText;
+        windowEl.className = 'status-text ' + (data.window_status === 'open' ? 'warning' : 'normal');
+    }
+
+    // 灯光
+    const lightEl = document.getElementById('lightStatus');
+    if (lightEl) {
+        const lightText = data.light_status === 'on' ? t('status.on') : t('status.off');
+        lightEl.textContent = lightText;
+        lightEl.className = 'status-text ' + (data.light_status === 'on' ? 'active' : 'normal');
+    }
+
+    // 空调
+    const acEl = document.getElementById('acStatus');
+    if (acEl) {
+        const acText = data.ac_status === 'on' ? t('status.ac_on') : t('status.ac_off');
+        acEl.textContent = acText;
+        acEl.className = 'status-text ' + (data.ac_status === 'on' ? 'active' : 'normal');
+    }
+
+    // 统计
+    if (data.statistics) {
+        updateStats(data.statistics);
+    }
+}
+
+function updateStats(stats) {
+    const temp24h = stats.temperature_24h || {};
+    const avgTempEl = document.getElementById('avgTemp24h');
+    if (avgTempEl) avgTempEl.textContent = temp24h.avg ? temp24h.avg.toFixed(1) + '\u00b0C' : '--';
+
+    const access24h = stats.access_24h || {};
+    const accessEl = document.getElementById('accessCount24h');
+    if (accessEl) accessEl.textContent = access24h.total || 0;
+
+    const light24h = stats.light_24h || {};
+    const lightEl = document.getElementById('lightUsage24h');
+    if (lightEl) lightEl.textContent = light24h.total_changes || 0;
+}
+
+// ==================== 控制操作（带防抖） ====================
+
+async function toggleDoor() {
+    const data = await apiGet('/api/door');
+    const newStatus = (data && data.door_status === 'open') ? 'closed' : 'open';
+    const result = await apiPost('/api/door', { status: newStatus });
+    if (result) {
+        showNotification(getMessage(result));
+        loadStatus();
+    }
+}
+
+async function toggleWindow() {
+    const data = await apiGet('/api/window');
+    const newStatus = (data && data.window_status === 'open') ? 'closed' : 'open';
+    const result = await apiPost('/api/window', { status: newStatus });
+    if (result) {
+        showNotification(getMessage(result));
+        loadStatus();
+    }
+}
+
+async function toggleLight() {
+    const data = await apiGet('/api/light');
+    const newStatus = (data && data.light_status === 'on') ? 'off' : 'on';
+    const brightness = document.getElementById('lightBrightness')?.value || 50;
+    const result = await apiPost('/api/light', { status: newStatus, brightness: parseInt(brightness) });
+    if (result) {
+        showNotification(getMessage(result));
+        loadStatus();
+    }
+}
+
+async function setFanSpeed() {
+    const speed = document.getElementById('fanSpeedControl')?.value || 0;
+    const result = await apiPost('/api/fan', { speed: parseInt(speed) });
+    if (result) {
+        showNotification(getMessage(result));
+        loadStatus();
+    }
+}
+
+async function toggleAC() {
+    const data = await apiGet('/api/ac');
+    const newStatus = (data && data.ac_status === 'on') ? 'off' : 'on';
+    const temp = document.getElementById('acTemperature')?.value || 26;
+    const result = await apiPost('/api/ac', { status: newStatus, temperature: parseInt(temp) });
+    if (result) {
+        showNotification(getMessage(result));
+        loadStatus();
+    }
 }
 
 // ==================== 通知 ====================
+
 function showNotification(message, type = 'info') {
     const el = document.getElementById('notification');
     if (!el) return;
@@ -33,261 +302,60 @@ function showNotification(message, type = 'info') {
     setTimeout(() => { el.className = 'notification hidden'; }, 3000);
 }
 
-// ==================== API调用封装 ====================
-async function apiGet(url) {
-    try {
-        const res = await fetch(url);
-        return await res.json();
-    } catch (e) {
-        console.error('API GET error:', e);
-        return null;
-    }
+function getMessage(result) {
+    return currentLang === 'en' ? (result.message_en || result.message) : result.message;
 }
 
-async function apiPost(url, data) {
-    try {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return await res.json();
-    } catch (e) {
-        console.error('API POST error:', e);
-        return null;
-    }
+// ==================== 时钟 ====================
+
+function updateClock() {
+    const now = new Date();
+    const el = document.getElementById('currentTime');
+    if (!el) return;
+    const locale = currentLang === 'zh' ? 'zh-CN' : 'en-US';
+    el.textContent = now.toLocaleTimeString(locale, { hour12: false });
 }
 
-// ==================== 加载系统状态 ====================
-async function loadStatus() {
-    const data = await apiGet('/api/status');
-    if (!data) return;
-    currentStatus = data;
-    updateUI(data);
+// ==================== 图表 ====================
+
+function initCharts() {
+    loadTemperatureChart();
 }
 
-function updateUI(data) {
-    // 温度
-    const temp = parseFloat(data.temperature).toFixed(1);
-    document.getElementById('tempValue').textContent = temp;
-    
-    // 湿度
-    const humidity = data.humidity ? parseFloat(data.humidity).toFixed(0) : '--';
-    document.getElementById('humidityValue').textContent = humidity;
-    
-    // 温度统计
-    if (data.statistics && data.statistics.temperature_24h) {
-        const s = data.statistics.temperature_24h;
-        document.getElementById('tempMax').textContent = s.max ? s.max.toFixed(1) : '--';
-        document.getElementById('tempMin').textContent = s.min ? s.min.toFixed(1) : '--';
-        document.getElementById('tempAvg').textContent = s.avg ? s.avg.toFixed(1) : '--';
-    }
-    
-    // 温度告警
-    const alertEl = document.getElementById('tempAlert');
-    if (temp >= 30) {
-        alertEl.textContent = t('temp.too_high');
-        alertEl.className = 'card-badge danger';
-    } else if (temp >= 28) {
-        alertEl.textContent = t('temp.high_warn');
-        alertEl.className = 'card-badge warning';
-    } else {
-        alertEl.textContent = t('temp.normal');
-        alertEl.className = 'card-badge';
-    }
-    
-    // 风扇
-    const fanSpeed = data.fan_speed || 0;
-    document.getElementById('fanSpeed').value = fanSpeed;
-    document.getElementById('fanSpeedValue').textContent = fanSpeed + '%';
-    updateFanAnimation(fanSpeed);
-    
-    // 门
-    updateDoorWindowUI('door', data.door_status);
-    updateDoorWindowUI('window', data.window_status);
-    
-    // 灯光
-    const lightOn = data.light_status === 'on';
-    const brightness = data.light_brightness || 0;
-    document.getElementById('brightnessSlider').value = brightness;
-    document.getElementById('brightnessValue').textContent = brightness + '%';
-    document.getElementById('bulb').className = lightOn ? 'bulb on' : 'bulb';
-    document.getElementById('bulb').style.opacity = brightness / 100;
-    document.getElementById('lightIndicator').className = lightOn ? 'light-indicator on' : 'light-indicator';
-    
-    // 空调
-    const acOn = data.ac_status === 'on';
-    const acTemp = data.ac_temperature || 26;
-    document.getElementById('acTempDisplay').textContent = acTemp;
-    document.getElementById('acTempSlider').value = acTemp;
-    document.getElementById('acTempSliderValue').textContent = acTemp + '°C';
-    document.getElementById('acBadge').textContent = acOn ? t('ac.running') : t('ac.off');
-    document.getElementById('acBadge').className = acOn ? 'ac-status-badge on' : 'ac-status-badge';
-    document.getElementById('acPowerBtn').className = acOn ? 'btn btn-ac btn-power active' : 'btn btn-ac btn-power';
-}
+async function loadTemperatureChart() {
+    const data = await apiGet('/api/temperature?hours=24');
+    if (!data || data.length === 0) return;
 
-function updateFanAnimation(speed) {
-    const blades = document.getElementById('fanBlades');
-    blades.className = 'fan-blades';
-    if (speed > 70) blades.classList.add('spinning-fast');
-    else if (speed > 40) blades.classList.add('spinning-medium');
-    else if (speed > 0) blades.classList.add('spinning-slow');
-}
-
-function updateDoorWindowUI(type, status) {
-    const statusEl = document.getElementById(type + 'Status');
-    const iconEl = document.getElementById(type + 'Icon');
-    statusEl.textContent = status === 'open' ? t('door.opened') : t('door.closed');
-    statusEl.className = 'dw-status ' + status;
-    if (iconEl) {
-        iconEl.className = 'dw-icon' + (status === 'open' ? ' open' : '');
-    }
-}
-
-// ==================== 控制操作 ====================
-
-// 风扇控制
-async function setFan(speed) {
-    const res = await apiPost('/api/fan', { speed: speed });
-    if (res) {
-        document.getElementById('fanSpeed').value = speed;
-        document.getElementById('fanSpeedValue').textContent = speed + '%';
-        updateFanAnimation(speed);
-        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
-        showNotification(msg, 'success');
-    }
-}
-
-// 门控制
-async function toggleDoor() {
-    const current = currentStatus.door_status || 'closed';
-    const newStatus = current === 'closed' ? 'open' : 'closed';
-    const res = await apiPost('/api/door', { status: newStatus });
-    if (res) {
-        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
-        showNotification(msg, 'success');
-        loadStatus();
-    }
-}
-
-// 窗户控制
-async function toggleWindow() {
-    const current = currentStatus.window_status || 'closed';
-    const newStatus = current === 'closed' ? 'open' : 'closed';
-    const res = await apiPost('/api/window', { status: newStatus });
-    if (res) {
-        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
-        showNotification(msg, 'success');
-        loadStatus();
-    }
-}
-
-// 灯光控制
-async function setLight(status, brightness) {
-    const res = await apiPost('/api/light', { status: status, brightness: brightness });
-    if (res) {
-        document.getElementById('brightnessSlider').value = brightness;
-        document.getElementById('brightnessValue').textContent = brightness + '%';
-        document.getElementById('bulb').className = status === 'on' ? 'bulb on' : 'bulb';
-        document.getElementById('bulb').style.opacity = brightness / 100;
-        document.getElementById('lightIndicator').className = status === 'on' ? 'light-indicator on' : 'light-indicator';
-        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
-        showNotification(msg, 'success');
-    }
-}
-
-// 空调控制
-async function toggleAC() {
-    const current = currentStatus.ac_status || 'off';
-    const newStatus = current === 'off' ? 'on' : 'off';
-    const temp = currentStatus.ac_temperature || 26;
-    const res = await apiPost('/api/ac', { status: newStatus, temperature: temp });
-    if (res) {
-        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
-        showNotification(msg, 'success');
-        loadStatus();
-    }
-}
-
-async function adjustAC(delta) {
-    const current = currentStatus.ac_temperature || 26;
-    const newTemp = Math.max(16, Math.min(30, current + delta));
-    const status = currentStatus.ac_status === 'on' ? 'on' : 'on'; // 调温度自动开
-    const res = await apiPost('/api/ac', { status: 'on', temperature: newTemp });
-    if (res) {
-        const msg = I18N.currentLang === 'en' ? (res.message_en || res.message) : res.message;
-        showNotification(msg, 'success');
-        loadStatus();
-    }
-}
-
-// ==================== 远程控制 ====================
-async function remoteControl(action) {
-    switch(action) {
-        case 'light_on':
-            await setLight('on', 100);
-            break;
-        case 'light_off':
-            await setLight('off', 0);
-            break;
-        case 'ac_on':
-            await apiPost('/api/ac', { status: 'on', temperature: 26 });
-            showNotification(t('notify.ac_on'), 'success');
-            loadStatus();
-            break;
-        case 'ac_off':
-            await apiPost('/api/ac', { status: 'off', temperature: 26 });
-            showNotification(t('notify.ac_off'), 'success');
-            loadStatus();
-            break;
-        case 'fan_on':
-            await setFan(60);
-            break;
-        case 'fan_off':
-            await setFan(0);
-            break;
-        case 'door_open':
-            await toggleDoor();
-            break;
-        case 'door_close':
-            await toggleDoor();
-            break;
-    }
-}
-
-// ==================== 温度趋势图 ====================
-function initTempChart() {
     const ctx = document.getElementById('tempChart');
     if (!ctx) return;
-    
-    tempChart = new Chart(ctx, {
+
+    const labels = data.slice(0, 20).reverse().map(d => {
+        const dt = new Date(d.timestamp);
+        return dt.getHours() + ':' + dt.getMinutes().toString().padStart(2, '0');
+    });
+    const temps = data.slice(0, 20).reverse().map(d => d.temperature);
+    const hums = data.slice(0, 20).reverse().map(d => d.humidity);
+
+    new Chart(ctx, {
         type: 'line',
         data: {
-            labels: [],
+            labels: labels,
             datasets: [
                 {
                     label: t('chart.temp'),
-                    data: [],
+                    data: temps,
                     borderColor: '#00e5ff',
                     backgroundColor: 'rgba(0, 229, 255, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
                     tension: 0.4,
-                    pointRadius: 0,
-                    pointHoverRadius: 5,
-                    pointHoverBackgroundColor: '#00e5ff'
+                    fill: true
                 },
                 {
                     label: t('chart.humidity'),
-                    data: [],
-                    borderColor: '#00b4d8',
-                    backgroundColor: 'rgba(0, 180, 216, 0.05)',
-                    borderWidth: 1.5,
-                    fill: true,
+                    data: hums,
+                    borderColor: '#7c4dff',
+                    backgroundColor: 'rgba(124, 77, 255, 0.1)',
                     tension: 0.4,
-                    pointRadius: 0,
-                    pointHoverRadius: 5,
-                    pointHoverBackgroundColor: '#00b4d8',
+                    fill: true,
                     yAxisID: 'y1'
                 }
             ]
@@ -295,119 +363,29 @@ function initTempChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
+            interaction: { intersect: false, mode: 'index' },
             plugins: {
                 legend: {
-                    labels: {
-                        color: '#8ba4b8',
-                        font: { size: 11 },
-                        usePointStyle: true,
-                        pointStyleWidth: 8
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(15, 25, 35, 0.9)',
-                    borderColor: '#2a4a5e',
-                    borderWidth: 1,
-                    titleColor: '#e8f0f8',
-                    bodyColor: '#8ba4b8',
-                    padding: 12
+                    labels: { color: '#b0b0b0' }
                 }
             },
             scales: {
                 x: {
-                    ticks: { color: '#5a7a8e', maxTicksLimit: 10, font: { size: 10 } },
-                    grid: { color: 'rgba(42, 74, 94, 0.3)' }
+                    ticks: { color: '#b0b0b0' },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
                 },
                 y: {
-                    ticks: { color: '#5a7a8e', font: { size: 10 } },
-                    grid: { color: 'rgba(42, 74, 94, 0.3)' },
-                    title: { display: true, text: '°C', color: '#5a7a8e' }
+                    ticks: { color: '#b0b0b0' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    title: { display: true, text: '\u00b0C', color: '#b0b0b0' }
                 },
                 y1: {
                     position: 'right',
-                    ticks: { color: '#5a7a8e', font: { size: 10 } },
-                    grid: { drawOnChartArea: false },
-                    title: { display: true, text: '%', color: '#5a7a8e' },
-                    min: 0,
-                    max: 100
+                    ticks: { color: '#b0b0b0' },
+                    grid: { display: false },
+                    title: { display: true, text: '%', color: '#b0b0b0' }
                 }
             }
         }
     });
 }
-
-async function loadTempHistory() {
-    const data = await apiGet('/api/temperature?hours=24');
-    if (!data || !tempChart) return;
-    
-    // 数据按时间升序（API返回降序，需要反转）
-    const reversed = [...data].reverse();
-    const labels = reversed.map(d => {
-        const dt = new Date(d.timestamp);
-        const locale = I18N.currentLang === 'zh' ? 'zh-CN' : 'en-US';
-        return dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-    });
-    const temps = reversed.map(d => d.temperature);
-    const humidities = reversed.map(d => d.humidity);
-    
-    tempChart.data.labels = labels;
-    tempChart.data.datasets[0].data = temps;
-    tempChart.data.datasets[1].data = humidities;
-    tempChart.update('none');
-}
-
-// ==================== 滑块事件监听 ====================
-document.addEventListener('DOMContentLoaded', () => {
-    // 风扇滑块
-    const fanSlider = document.getElementById('fanSpeed');
-    if (fanSlider) {
-        fanSlider.addEventListener('input', function() {
-            document.getElementById('fanSpeedValue').textContent = this.value + '%';
-            updateFanAnimation(parseInt(this.value));
-        });
-        fanSlider.addEventListener('change', function() {
-            setFan(parseInt(this.value));
-        });
-    }
-    
-    // 亮度滑块
-    const brightnessSlider = document.getElementById('brightnessSlider');
-    if (brightnessSlider) {
-        brightnessSlider.addEventListener('input', function() {
-            document.getElementById('brightnessValue').textContent = this.value + '%';
-            const val = parseInt(this.value);
-            document.getElementById('bulb').style.opacity = val / 100;
-            if (val > 0) {
-                document.getElementById('bulb').className = 'bulb on';
-                document.getElementById('lightIndicator').className = 'light-indicator on';
-            }
-        });
-        brightnessSlider.addEventListener('change', function() {
-            const val = parseInt(this.value);
-            setLight(val > 0 ? 'on' : 'off', val);
-        });
-    }
-    
-    // 空调温度滑块
-    const acTempSlider = document.getElementById('acTempSlider');
-    if (acTempSlider) {
-        acTempSlider.addEventListener('input', function() {
-            document.getElementById('acTempSliderValue').textContent = this.value + '°C';
-        });
-        acTempSlider.addEventListener('change', function() {
-            adjustAC(0); // 直接用滑块值
-            // override: 直接设置温度
-            const temp = parseInt(this.value);
-            apiPost('/api/ac', { status: 'on', temperature: temp }).then(res => {
-                if (res) {
-                    showNotification(res.message, 'success');
-                    loadStatus();
-                }
-            });
-        });
-    }
-});

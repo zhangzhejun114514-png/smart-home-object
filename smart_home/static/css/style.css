@@ -1295,3 +1295,26 @@ body {
     color: var(--accent-red);
     border: 1px solid rgba(255, 23, 68, 0.3);
 }
+
+/* ==================== 连接状态指示器 ==================== */
+.connection-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+.connection-indicator.online {
+    color: var(--accent-green);
+}
+.connection-indicator.offline {
+    color: var(--accent-red);
+    background: rgba(255, 23, 68, 0.1);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

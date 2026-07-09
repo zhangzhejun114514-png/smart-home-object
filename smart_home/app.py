@@ -3,8 +3,29 @@ from database import db
 from datetime import datetime
 from ha_client import ha_client
 from face_recognition import face_engine
+from utils import api_error_handler, safe_base64_decode
 
 app = Flask(__name__)
+
+# ==================== 全局异常处理 ====================
+# 捕获所有未处理异常，防止 Flask 返回 500 错误页面导致前端卡死
+
+@app.errorhandler(Exception)
+def handle_global_error(e):
+    import traceback
+    app.logger.error(f"Unhandled exception: {e}\n{traceback.format_exc()}")
+    return jsonify({
+        'error': '服务器内部错误',
+        'error_en': 'Internal server error',
+        'detail': str(e) if app.debug else None
+    }), 500
+
+@app.errorhandler(404)
+def handle_not_found(e):
+    return jsonify({
+        'error': '接口不存在',
+        'error_en': 'API endpoint not found'
+    }), 404
 
 # ==================== 页面路由 ====================
 
@@ -224,6 +245,30 @@ def add_person():
         return jsonify({'message': f'已添加授权人员: {name}', 'message_en': f'Authorized person added: {name}'})
     return jsonify({'error': f'人员 {name} 已存在', 'error_en': f'Person {name} already exists'}), 400
 
+# ==================== API: 健康检查 ====================
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """系统健康检查 - 用于前端断线检测"""
+    import time
+    status = {
+        'status': 'ok',
+        'timestamp': time.time(),
+        'services': {
+            'database': True,
+            'ha': ha_client.connected,
+            'face_recognition': face_engine.simulation_mode is False,
+        }
+    }
+    # 快速检查数据库是否可用
+    try:
+        db.get_current_status()
+    except Exception:
+        status['services']['database'] = False
+        status['status'] = 'degraded'
+
+    return jsonify(status)
+
 # ==================== API: 统计 ====================
 
 @app.route('/api/statistics', methods=['GET'])
@@ -243,11 +288,16 @@ def face_recognize():
     if not image_data:
         return jsonify({'error': '无图像数据', 'error_en': 'No image data'}), 400
 
-    # 去掉 Base64 前缀 (data:image/jpeg;base64,)
-    if ',' in image_data:
-        image_data = image_data.split(',')[1]
+    # 安全解码 Base64（限制 5MB，防止内存攻击）
+    try:
+        image_bytes = safe_base64_decode(image_data, max_size_mb=5)
+    except ValueError as e:
+        return jsonify({'error': f'图像数据错误: {str(e)}', 'error_en': f'Image data error: {str(e)}'}), 400
 
-    result = face_engine.recognize_from_base64(image_data)
+    # 安全解码后直接传递给识别引擎
+    import base64
+    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+    result = face_engine.recognize_from_base64(image_b64)
     return jsonify(result)
 
 @app.route('/api/face/status', methods=['GET'])

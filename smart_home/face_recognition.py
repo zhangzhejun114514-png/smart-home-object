@@ -1,7 +1,8 @@
 """
-人脸识别模块 - YOLOv8 集成
+人脸识别模块 - YOLOv8 集成（稳定增强版）
 ============================
 用于香橙派摄像头人脸识别，支持加载预训练 YOLOv8 模型。
+增强特性：请求节流、安全 Base64 解码、异常降级、连接健康追踪
 
 部署说明（香橙派）:
 1. 安装依赖: pip install ultralytics opencv-python-headless numpy
@@ -20,11 +21,12 @@ import json
 import base64
 import logging
 import numpy as np
+from utils import ConnectionHealth, RequestThrottler
 
 logger = logging.getLogger(__name__)
 
 # 配置文件路径
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'face_config.json')
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'face_config.json')
 
 # 默认配置
 DEFAULT_CONFIG = {
@@ -56,13 +58,17 @@ DEFAULT_CONFIG = {
 
 
 class FaceRecognition:
-    """YOLOv8 人脸识别引擎"""
+    """YOLOv8 人脸识别引擎（稳定增强版）"""
 
     def __init__(self, config_path=None):
         self.config = self._load_config(config_path)
         self.model = None
         self.simulation_mode = self.config.get('simulation_mode', True)
         self._model_loaded = False
+        # 请求节流器（防止请求堆积）
+        self.throttler = RequestThrottler(min_interval=1.5)
+        # 连接健康状态
+        self.health = ConnectionHealth("FaceRecognition")
 
         # 如果非模拟模式，尝试加载模型
         if not self.simulation_mode:
@@ -120,10 +126,10 @@ class FaceRecognition:
 
     def recognize_from_base64(self, image_base64):
         """
-        从 Base64 编码的图像中识别人脸
+        从 Base64 编码的图像中识别人脸（带请求节流）
 
         Args:
-            image_base64: Base64编码的JPEG图像（不含 data:image/jpeg;base64, 前缀）
+            image_base64: Base64编码的JPEG图像（可能含 data:image/jpeg;base64, 前缀）
 
         Returns:
             dict: {
@@ -134,15 +140,30 @@ class FaceRecognition:
                 'mode': str                  # 'yolov8' or 'simulation'
             }
         """
+        # 请求节流检查
+        if not self.throttler.can_execute():
+            wait_time = self.throttler.time_until_next()
+            return {
+                'detected': False,
+                'face_id': None,
+                'confidence': 0,
+                'faces': [],
+                'mode': 'throttled',
+                'message': f'请求过于频繁，请等待 {wait_time:.1f} 秒后再试'
+            }
+
         if self.simulation_mode:
-            return self._simulate_recognition()
+            result = self._simulate_recognition()
+            if result['detected']:
+                self.health.record_success()
+            return result
 
         # 真实 YOLOv8 识别
         return self._yolov8_recognize(image_base64)
 
     def recognize_from_frame(self, frame):
         """
-        从 numpy 数组（OpenCV 帧）中识别人脸
+        从 numpy 数组（OpenCV 帧）中识别人脸（带请求节流）
 
         Args:
             frame: numpy数组 (H, W, 3) BGR格式
@@ -150,10 +171,24 @@ class FaceRecognition:
         Returns:
             dict: 同 recognize_from_base64
         """
-        if self.simulation_mode:
-            return self._simulate_recognition()
+        # 请求节流检查
+        if not self.throttler.can_execute():
+            wait_time = self.throttler.time_until_next()
+            return {
+                'detected': False,
+                'face_id': None,
+                'confidence': 0,
+                'faces': [],
+                'mode': 'throttled',
+                'message': f'请求过于频繁，请等待 {wait_time:.1f} 秒后再试'
+            }
 
-        # 真实 YOLOv8 识别
+        if self.simulation_mode:
+            result = self._simulate_recognition()
+            if result['detected']:
+                self.health.record_success()
+            return result
+
         return self._yolov8_recognize_frame(frame)
 
     def _yolov8_recognize(self, image_base64):
@@ -162,18 +197,26 @@ class FaceRecognition:
             import cv2
             import numpy as np
 
-            # Base64 解码为图像
+            # Base64 解码为图像（去掉前缀）
+            if ',' in image_base64:
+                image_base64 = image_base64.split(',')[1]
+
             img_data = base64.b64decode(image_base64)
             img_array = np.frombuffer(img_data, dtype=np.uint8)
             frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
             if frame is None:
+                logger.warning("Failed to decode image from base64")
                 return self._empty_result('yolov8')
 
-            return self._yolov8_recognize_frame(frame)
+            result = self._yolov8_recognize_frame(frame)
+            if result['detected']:
+                self.health.record_success()
+            return result
 
         except Exception as e:
             logger.error(f"YOLOv8 识别失败: {e}")
+            self.health.record_failure(str(e))
             return self._empty_result('yolov8', error=str(e))
 
     def _yolov8_recognize_frame(self, frame):
@@ -228,6 +271,7 @@ class FaceRecognition:
                         best_face = face_info
 
             if best_face:
+                self.health.record_success()
                 return {
                     'detected': True,
                     'face_id': best_face['face_id'],
@@ -246,6 +290,7 @@ class FaceRecognition:
 
         except Exception as e:
             logger.error(f"YOLOv8 帧识别失败: {e}")
+            self.health.record_failure(str(e))
             return self._empty_result('yolov8', error=str(e))
 
     def _simulate_recognition(self):
@@ -298,7 +343,7 @@ class FaceRecognition:
 
     def get_status(self):
         """获取识别引擎状态"""
-        return {
+        status = {
             'model_loaded': self._model_loaded,
             'simulation_mode': self.simulation_mode,
             'mode': 'simulation' if self.simulation_mode else 'yolov8',
@@ -307,6 +352,8 @@ class FaceRecognition:
             'camera_device': self.config.get('camera_device', 0),
             'known_faces': self.config.get('known_faces', {})
         }
+        status.update(self.health.get_status())
+        return status
 
     def add_known_face(self, face_id, name):
         """添加已知人脸到数据库"""
