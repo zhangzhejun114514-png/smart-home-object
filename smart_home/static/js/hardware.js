@@ -3,6 +3,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
+    loadHAConfig();
     loadMapping();
 });
 
@@ -130,6 +131,17 @@ async function discoverDevices() {
         tbody.innerHTML = `<tr><td colspan="5">${isZh ? '未发现设备，请检查HA连接' : 'No devices found'}</td></tr>`;
         showNotification(isZh ? '未发现设备' : 'No devices found', 'error');
     }
+}
+
+// ==================== 加载HA配置到输入框 ====================
+async function loadHAConfig() {
+    const result = await apiGet('/api/ha/config');
+    if (!result) return;
+
+    const urlEl = document.getElementById('haUrl');
+    const tokenEl = document.getElementById('haToken');
+    if (urlEl && result.ha_url) urlEl.value = result.ha_url;
+    if (tokenEl && result.ha_token) tokenEl.value = result.ha_token;
 }
 
 // ==================== 加载设备映射表 ====================

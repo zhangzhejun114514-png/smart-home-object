@@ -460,7 +460,7 @@ def ha_get_config():
     """获取HA系统信息"""
     config = ha_client.get_config()
     mapping = ha_client.get_device_mapping()
-    return jsonify({'ha_config': config, 'device_mapping': mapping, 'ha_url': ha_client.base_url})
+    return jsonify({'ha_config': config, 'device_mapping': mapping, 'ha_url': ha_client.base_url, 'ha_token': ha_client.token})
 
 @app.route('/api/ha/config', methods=['POST'])
 def ha_save_config():
