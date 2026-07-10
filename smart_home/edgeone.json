@@ -2,15 +2,23 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/templates/index.html"
+      "destination": "/templates/dashboard.html"
     },
     {
-      "source": "/home",
-      "destination": "/templates/home.html"
+      "source": "/dashboard",
+      "destination": "/templates/dashboard.html"
     },
     {
-      "source": "/light",
-      "destination": "/templates/light.html"
+      "source": "/history",
+      "destination": "/templates/history.html"
+    },
+    {
+      "source": "/access",
+      "destination": "/templates/access.html"
+    },
+    {
+      "source": "/hardware",
+      "destination": "/templates/hardware.html"
     },
     {
       "source": "/static/*",
