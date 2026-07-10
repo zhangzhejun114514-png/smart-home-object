@@ -1,5 +1,20 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/templates/dashboard.html" }
+    {
+      "source": "/",
+      "destination": "/templates/index.html"
+    },
+    {
+      "source": "/home",
+      "destination": "/templates/home.html"
+    },
+    {
+      "source": "/light",
+      "destination": "/templates/light.html"
+    },
+    {
+      "source": "/static/*",
+      "destination": "/static/:splat"
+    }
   ]
 }
